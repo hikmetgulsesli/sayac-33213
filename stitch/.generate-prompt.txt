@@ -1,0 +1,248 @@
+# sayac-33213 — Basit Sayıcı Uygulaması PRD
+
+## 1. Genel Bakış
+
+sayac-33213, kullanıcıların bir sayıyı artırma, azaltma ve sıfırlama işlemlerini yapabilecekleri basit bir web sayıcı uygulamasıdır. Uygulama React 18 + Vite + Tailwind CSS ile geliştirilmiş tek sayfalık bir SPA'dır (Single Page Application). Sayı değeri localStorage üzerinde kalıcı olarak saklanır, böylece sayfa yenilense bile son değer korunur. Son 5 adım history listesi kullanıcıya geçmiş işlemleri gösterir. Türkçe arayüzlü, minimalist ve erişilebilir bir deneyim sunar.
+
+Hedef kitle: Günlük hayatta basit sayma/sayı takibi yapmak isteyen herkes. Örnek kullanım senaryoları: günlük su tüketimi sayacı, spor tekrar sayacı, stok takibi, basit anket sayacı.
+
+## 2. Hedefler
+
+2.1 Kullanıcı sayıyı +1 artırabilmeli ve bu anlık olarak ekranda görünmeli.
+2.2 Kullanıcı sayıyı -1 azaltabilmeli, negatif değerler desteklenmeli.
+2.3 Kullanıcı sayıyı sıfırlayabilmeli (0'a geri getirmeli).
+2.4 Sayı değeri tarayıcıda localStorage ile kalıcı olmalı, yenileme sonrası korunmalı.
+2.5 Son 5 işlem (artırma/azaltma/sıfırlama) history listesinde görünmeli.
+2.6 Tüm arayüz metinleri Türkçe olmalı.
+2.7 Mobil uyumlu (responsive) tasarım, 320px – 1920px arası tüm ekranlarda düzgün görünmeli.
+2.8 Erişilebilir tasarım: klavye navigasyonu, ARIA etiketleri, yeterli kontrast oranı.
+
+## 3. Tech Stack Detayı
+
+Framework: React 18.2 (fonksiyonel bileşenler + hooks)
+Build Tool: Vite 5.x — hızlı geliştirme sunucusu ve üretim build'i
+Styling: Tailwind CSS 3.x — utility-first CSS yaklaşımı, responsive grid/flexbox
+State Management: React useState + useEffect (yerel state, harici state kütüphanesi gerektirmez)
+Local Storage: Browser localStorage API — sayı değeri ve history JSON string olarak saklanır
+Routing: Yok (tek sayfa, routing gerektirmez)
+Icon Library: Lucide React — Arttır (+), Azalt (-), Sıfırla (RotateCcw) ikonları
+TypeScript: Evet, tam TypeScript projesi
+
+## 4. Fonksiyonel Gereksinimler
+
+### 4.1 Sayı Gösterimi
+- Ekranda büyük, okunaklı bir şekilde mevcut sayı değeri gösterilir
+- Sayı ortalanmış, büyük font boyutu (text-6xl veya üzeri)
+- Negatif sayılar desteklenir (eksi işareti ile gösterilir)
+- Binlik ayracı yok (basitlik için sadece rakam)
+
+### 4.2 Arttırma Butonu
+- Etiket: "Arttır" (+ ikonu ile birlikte)
+- Tıklama: mevcut değer +1 artar
+- Başarı durumu: ekrandaki sayı güncellenir, history'ye "+1" satırı eklenir
+- Erişilebilirlik: aria-label="Sayıyı 1 artır", role="button", keyboard focus destekli
+
+### 4.3 Azaltma Butonu
+- Etiket: "Azalt" (- ikonu ile birlikte)
+- Tıklama: mevcut değer -1 azalır
+- Başarı durumu: ekrandaki sayı güncellenir, history'ye "-1" satırı eklenir
+- Erişilebilirlik: aria-label="Sayıyı 1 azalt", role="button", keyboard focus destekli
+
+### 4.4 Sıfırla Butonu
+- Etiket: "Sıfırla" (RotateCcw ikonu ile birlikte)
+- Tıklama: değer 0'a döner
+- Tarih: "0" değerine sıfırlandığında history'ye "↺ 0" satırı eklenir
+- Erişilebilirlik: aria-label="Sayacı sıfırla", onay gerektirmez (hızlı işlem)
+
+### 4.5 localStorage Kalıcılığı
+- Her state değişikliğinde (artırma, azaltma, sıfırlama) otomatik olarak localStorage'a kayıt yapılır
+- Key: "sayac_value" — sayı değeri (number, JSON.stringify ile saklanır)
+- Key: "sayac_history" — history dizisi (JSON array, max 5 item, en yeni en üstte)
+- Sayfa yüklendiğinde localStorage'dan değer okunur, yoksa 0 başlangıç değeri kullanılır
+- localStorage hatası (quota exceeded, private mode): sessizce devam et, hata gösterme
+
+### 4.6 History Listesi
+- Son 5 işlem sıralı liste (en yeni en üstte)
+- Her satırda: zaman damgası (HH:mm:ss formatında) + işlem tipi + yeni değer
+- Format örneği: "14:23:01  +1  →  5"
+- History boşken boş bir liste gösterilir, "Henüz işlem yapılmadı" mesajı ile
+- Max 5 kayıt tutulur, 6. işlem eklendiğinde en eski silinir (FIFO)
+
+### 4.7 Hata Mesajları ve Boş Durumlar
+- History boş: "Henüz işlem yapılmadı" (text-gray-400, italic)
+- localStorage okuma hatası: sessizce 0 ile başla, console.error ile logla
+- localStorage yazma hatası: sessizce devam et
+
+## 5. Veri Modeli
+
+### Entity: Counter
+```typescript
+interface Counter {
+  value: number;        // Mevcut sayı değeri, negatif desteklenir
+  updatedAt: string;     // ISO 8601 zaman damgası, son güncelleme
+}
+```
+
+### Entity: HistoryEntry
+```typescript
+interface HistoryEntry {
+  id: string;            // Benzersiz ID (timestamp + random)
+  operation: '+1' | '-1' | '↺';  // Yapılan işlem
+  previousValue: number; // İşlem öncesi değer
+  newValue: number;      // İşlem sonrası değer
+  timestamp: string;     // HH:mm:ss formatında zaman
+}
+```
+
+### localStorage Keys
+| Key | Type | Açıklama |
+|-----|------|----------|
+| sayac_value | number | Mevcut sayaç değeri |
+| sayac_history | HistoryEntry[] | Son 5 işlem (JSON array) |
+
+## 6. UI/UX Gereksinimleri
+
+### 6.1 Design System
+Aesthetic: Minimal + Soft — temiz çizgiler, yumuşak köşeler, huzurlu renk tonları, göze batmayan ama keyifli arayüz.
+
+#### Renk Paleti
+| Rol | Hex | Kullanım |
+|-----|-----|----------|
+| Primary | #6366F1 | Ana butonlar (arttır, azalt) |
+| Secondary | #A5B4FC | Hover state, secondary elementler |
+| Background | #F8FAFC | Sayfa arka planı |
+| Surface | #FFFFFF | Kart, buton arka planları |
+| Text Primary | #1E293B | Ana metin, sayı değeri |
+| Text Secondary | #64748B | Tarih, açıklama metinleri |
+| Border | #E2E8F0 | Kart kenarları, dividers |
+| Success | #10B981 | Artırma butonu hover |
+| Error | #EF4444 | Azaltma butonu hover |
+| Reset | #F59E0B | Sıfırla butonu, amber tonu |
+
+#### Tipografi
+- Heading Font: Inter (Google Fonts) — sayı değeri ve başlıklar
+- Body Font: Inter — buton etiketleri ve diğer metinler
+- Fallback: system-ui, sans-serif
+- Sayı değeri: text-7xl, font-bold, tracking-tight
+- Buton etiketleri: text-base, font-semibold
+
+#### Icon Library: Lucide React
+- Plus: artırma butonu
+- Minus: azaltma butonu
+- RotateCcw: sıfırla butonu
+- Clock: history zaman damgası
+
+### 6.2 Spacing & Components
+Spacing scale: 4 / 8 / 12 / 16 / 24 / 32 / 48 px
+Border radius: rounded-xl (12px) — kart ve butonlar
+Shadow: shadow-sm — kart container, subtle elevation
+
+#### Butonlar
+- Boyut: min 48x48px dokunma hedefi, padding 16px 24px
+- Border-radius: rounded-xl
+- States: default (Surface bg), hover (renk değişimi), active (scale-95), disabled (opacity-50)
+- Focus: ring-2 ring-offset-2 ring-primary (klavye navigasyonu)
+
+#### Kart Container
+- Background: Surface (#FFFFFF)
+- Border: 1px solid Border (#E2E8F0)
+- Border-radius: rounded-2xl (16px)
+- Padding: p-8
+- Shadow: shadow-sm
+
+#### History Listesi
+- Her satır: flex row, arada space-x-3
+- Tarih: monospace font, text-sm, text-secondary
+- İşlem: font-semibold, renkli (+1 için green, -1 için red, ↺ için amber)
+- Yeni değer: text-primary, font-medium
+
+## 7. Non-Functional Requirements
+
+### 7.1 Performans
+- İlk yükleme: < 1 saniye (Vite hızlı build, minimal bundle)
+- Sayı güncelleme: < 16ms (60fps, React re-render süresi)
+- localStorage yazma: async, UI'ı bloklamaz
+- Bundle size hedefi: < 100KB gzipped (React + Tailwind base)
+
+### 7.2 Erişilebilirlik (WCAG 2.1 AA)
+- Tüm butonlarda aria-label mevcut
+- role="button" tüm butonlarda
+- Klavye: Tab ile navigasyon, Enter/Space ile tıklama
+- Focus indicator: ring-2, tüm interactive elementlerde görünür
+- Kontrast: sayı değeri text-primary (#1E293B) on Surface (#FFFFFF) = ~15:1
+- Touch hedefleri: minimum 48x48px
+- Ekran okuyucu: ARIA live region ile sayı değeri duyurulur (aria-live="polite")
+
+### 7.3 Tarayıcı Desteği
+- Chrome 90+, Firefox 88+, Safari 14+, Edge 90+
+- iOS Safari 14+, Android Chrome 90+
+- Responsive: mobile 320px → tablet 768px → desktop 1920px
+- Flexbox + CSS Grid (Tailwind defaults)
+
+### 7.4 Browser State Management
+```typescript
+window.app = {
+  state: 'idle' | 'loading' | 'error',
+  counter: { value: number, history: HistoryEntry[] },
+  actions: { increment, decrement, reset }
+}
+```
+
+## 8. Proje Yapısı
+
+```
+src/
+├── components/
+│   ├── CounterDisplay.tsx    # Sayı değeri gösterim bileşeni
+│   ├── ActionButtons.tsx    # Arttır/Azalt/Sıfırla butonları
+│   └── HistoryList.tsx      # Son 5 işlem listesi
+├── hooks/
+│   ├── useCounter.ts        # Sayı state ve işlem mantığı
+│   └── useLocalStorage.ts   # localStorage okuma/yazma hook
+├── types/
+│   └── index.ts             # TypeScript tipleri (Counter, HistoryEntry)
+├── utils/
+│   └── time.ts              # Zaman formatlama helper'ları
+├── App.tsx                  # Ana uygulama bileşeni
+├── main.tsx                 # Vite entry point
+└── index.css                # Tailwind base + custom CSS
+```
+
+## 9. Window State (Testing / Dogfood)
+
+```typescript
+window.app = {
+  state: 'idle',  // idle | loading (localStorage işlemi sırasında)
+  counter: {
+    value: 0,
+    history: []  // HistoryEntry[]
+  }
+}
+```
+
+## 10. Ekranlar
+
+| # | Ekran Adı | Tür | Açıklama |
+|---|-----------|-----|----------|
+| 1 | Ana Sayfa | counter-view | Sayı değeri, 3 aksiyon butonu, history listesi — tek sayfada hepsi |
+| 2 | Boş Durum (History) | empty-state | Henüz işlem yapılmadığında history alanında gösterilen mesaj |
+| 3 | Responsive Görünüm | responsive-layout | Mobil (320px) ve desktop (1920px) için optimize edilmiş aynı sayfa |
+
+## 11. Kurallar — YapılmAMASı Gerekenler
+
+- React.memo, useMemo, useCallback kullanma — gereksiz optimizasyon, proje çok basit
+- Routing ekleme — tek sayfa, URL değişikliği yok
+- Debounce/throttle — localStorage yazması zaten async
+- Test dosyası yazma — bu plan aşamasında değil
+- İkon yerine emoji kullanma — Lucide React kullanılacak
+
+Generate a SEPARATE screen design for EVERY page, view, modal, dialog, tab panel, and settings screen described in this PRD. Do NOT skip ANY screen — even if it seems minor.
+
+MANDATORY SCREENS:
+- If the PRD mentions "settings" or "ayarlar" → generate a Settings screen
+- If the PRD mentions tabs or bottom navigation → generate EACH tab view as a separate screen
+- If the PRD mentions modals (statistics, help, share, confirmation) → generate each as a separate screen
+- If the PRD mentions error states, empty states, loading states → generate those too
+- Generate at least as many screens as there are distinct views/pages/modals in the PRD
+
+All visible text must be in Turkish. Use a dark, modern theme.
